@@ -1,80 +1,127 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import Filter from './components/Filter'
 import PersonForm from './components/PersonForm'
 import Persons from './components/Persons'
+import Notification from './components/Notification'
+import personService from './services/persons'
 
 const App = () => {
 
-  const [persons, setPersons] = useState([
-    { name: 'Arto Hellas', number: '040-123456', id: 1 },
-    { name: 'Ada Lovelace', number: '39-44-5323523', id: 2 },
-    { name: 'Dan Abramov', number: '12-43-234345', id: 3 },
-    { name: 'Mary Poppendieck', number: '39-23-6423122', id: 4 }
-  ])
-
+  const [persons, setPersons] = useState([])
   const [newName, setNewName] = useState('')
   const [newNumber, setNewNumber] = useState('')
-  const [filterText, setFilterText] = useState('') 
+  const [filterText, setFilterText] = useState('')
+  const [updateFlag, setUpdateFlag] = useState(false)
+  const [message, setMessage] = useState(null)
+  const [success, setSuccess] = useState(false)
+  useEffect(() => {
+    personService
+      .getAll()
+      .then(initialPersons => {
+        setPersons(initialPersons)
+      })
+  }, [updateFlag])
 
-  const handleNameChange = (event) => { 
+  const handleNameChange = (event) => {
     console.log(event.target.value);
     setNewName(event.target.value);
 
   }
-  const handleNumberChange = (event) => { 
+  const handleNumberChange = (event) => {
     console.log(event.target.value);
     setNewNumber(event.target.value);
 
   }
-  const handleFilterTextChange = (event) => { 
-    console.log('filter text',event.target.value);
+  const handleFilterTextChange = (event) => {
+    console.log('filter text', event.target.value);
     setFilterText(event.target.value);
 
   }
-  const addPerson = (event) => { 
+  const handleDelete = id => {
+    const person = persons.find(p => p.id === id)
+
+    if (confirm(`delete ${person.name}`)) {
+      personService
+        .remove(id)
+        .then(() => setUpdateFlag(!updateFlag))
+    }
+  }
+
+  const addPerson = (event) => {
     event.preventDefault();
     console.log('button clicked', event.target);
-    const newPerson = { 
-      'name': newName, 
-      'number': newNumber, 
-      'id': persons.length +1
+    const newPerson = {
+      'name': newName,
+      'number': newNumber
     }
     // Check if the name already exists in the phonebook
-    if (persons.some((person) => person.name.toLowerCase() === newName.toLowerCase())) {
-      alert(`${newName} is already added to phonebook`)
-      return;
-  }
-    setPersons(persons.concat(newPerson))
-    setNewName('')
-    setNewNumber('')
-   }
+    const person = persons.find(p => p.name === newName)
+    if (person) {
+      if (person.name.toLowerCase() === newName.toLowerCase()) {
 
-   const filteredPersons = persons.filter((person) =>
-   person.name.toLowerCase().includes(filterText.toLowerCase())
- );
+        if (confirm(`${person.name} already added to the phonebook, replace the old number with the new one`)) {
+          personService
+            .update(person.id, newPerson)
+            .then(() => {
+              setUpdateFlag(!updateFlag)
+              setSuccess(true)
+              setMessage('Person updated successfully')
+              setTimeout(() => { setMessage(null) }, 5000)
+            })
+            .catch(error => {
+              setSuccess(false)
+              setMessage(
+                `Person '${person.name}' was already removed from server`
+              )
+              setTimeout(() => {
+                setMessage(null)
+              }, 5000)
+            })
+        }
+      }
+    }
+    else {
+      personService
+        .create(newPerson)
+        .then(returnedPerson => {
+          setPersons(persons.concat(returnedPerson))
+          setSuccess(true)
+          setMessage('Person Added successfully')
+          setTimeout(() => { setMessage(null) }, 5000)
+          setNewName('')
+          setNewNumber('')
+        })
+    }
+
+  }
+  console.log(persons);
+  const filteredPersons = persons.filter((person) =>
+    person.name.toLowerCase().includes(filterText.toLowerCase())
+  );
 
   return (
     <div>
       <h2>Phonebook</h2>
-
-      <Filter 
-        filterText={filterText} 
+      <Notification message={message} success={success}/>
+      <Filter
+        filterText={filterText}
         handleFilterTextChange={handleFilterTextChange} />
 
       <h3>Add a new</h3>
 
-      <PersonForm 
-        persons={persons} 
-        addPerson={addPerson} 
-        newName={newName} 
-        newNumber={newNumber} 
-        handleNameChange={handleNameChange} 
-        handleNumberChange={handleNumberChange}/>
+      <PersonForm
+        persons={persons}
+        addPerson={addPerson}
+        newName={newName}
+        newNumber={newNumber}
+        handleNameChange={handleNameChange}
+        handleNumberChange={handleNumberChange} />
 
       <h3>Numbers</h3>
 
-      <Persons 
-      persons={filteredPersons}/>
+      <Persons
+        persons={filteredPersons}
+        handleDelete={handleDelete} />
     </div>
   )
 }
